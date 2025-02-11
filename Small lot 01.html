@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trolley Material Entry</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            width: 600px;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            position: relative;
+        }
+        .logo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #009999;
+        }
+        h1 {
+            text-align: center;
+            color: #009999;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: bold;
+        }
+        .form-group input, .form-group select, .form-group button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .form-group button {
+            width: auto;
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        .form-group button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        .action-buttons {
+            margin-top: 20px;
+        }
+        .action-buttons button {
+            margin-right: 10px;
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: none;
+            color: #fff;
+        }
+        .action-buttons #generate-trolley-file {
+            background-color: #28a745;
+        }
+        .action-buttons #generate-trolley-file:hover {
+            background-color: #218838;
+        }
+        #upload-file {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">SIEMENS</div>
+
+        <h1>Trolley Material Entry</h1>
+
+        <form id="material-entry-form">
+            <div class="form-group">
+                <label for="upload-file">Upload Material Master File</label>
+                <input type="file" id="upload-file" accept=".xlsx, .xls">
+            </div>
+
+            <div class="form-group">
+                <label for="trolley-name">Trolley Name</label>
+                <input type="text" id="trolley-name" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="material-description">Material Description</label>
+                <input list="material-options" id="material-description" placeholder="Type or select a description..." inputmode="numeric">
+                <datalist id="material-options"></datalist>
+            </div>
+
+            <div class="form-group">
+                <label for="material-number">Material Number</label>
+                <input type="text" id="material-number" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="quantity">Quantity</label>
+                <input type="number" id="quantity" min="1">
+            </div>
+
+            <button type="button" id="add-entry">Add Entry</button>
+        </form>
+
+        <table id="entry-table">
+            <thead>
+                <tr>
+                    <th>Material Description</th>
+                    <th>Material Number</th>
+                    <th>Quantity</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="action-buttons">
+            <button type="button" id="generate-trolley-file">Generate Trolley File</button>
+        </div>
+    </div>
+
+    <script>
+        const materialDescriptionInput = document.getElementById('material-description');
+        const materialNumberInput = document.getElementById('material-number');
+        const quantityInput = document.getElementById('quantity');
+        const trolleyNameInput = document.getElementById('trolley-name');
+        const entryTableBody = document.getElementById('entry-table').querySelector('tbody');
+        const materialOptions = document.getElementById('material-options');
+        const allEntries = [];
+        let materialMasterData = [];
+        let trolleyCount = 0;
+
+        document.getElementById('upload-file').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    materialMasterData = jsonData.slice(1).map(row => ({
+                        description: row[0],
+                        number: row[1]
+                    }));
+
+                    updateMaterialOptions();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        function updateMaterialOptions() {
+            materialOptions.innerHTML = '';
+            materialMasterData.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.description;
+                materialOptions.appendChild(option);
+            });
+        }
+
+        materialDescriptionInput.addEventListener('input', () => {
+            const selectedDescription = materialDescriptionInput.value;
+            const material = materialMasterData.find(item => item.description === selectedDescription);
+            materialNumberInput.value = material ? material.number : '';
+        });
+
+        function generateTrolleyName() {
+            const today = new Date();
+            const datePart = today.toISOString().split('T')[0].replace(/-/g, '');
+            trolleyCount++;
+            return `${datePart}-${trolleyCount}`;
+        }
+
+        trolleyNameInput.value = generateTrolleyName();
+
+        document.getElementById('add-entry').addEventListener('click', () => {
+            const description = materialDescriptionInput.value;
+            const number = materialNumberInput.value;
+            const quantity = quantityInput.value;
+
+            if (!description || !number || !quantity) {
+                alert('Please fill all fields before adding entry.');
+                return;
+            }
+
+            // Save the entry in memory
+            const entry = { description, number, quantity };
+            allEntries.push(entry);
+
+            // Display only the last entry in the table
+            entryTableBody.innerHTML = '';
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${description}</td><td>${number}</td><td>${quantity}</td>`;
+            entryTableBody.appendChild(row);
+
+            // Clear the description and quantity fields
+            materialDescriptionInput.value = '';
+            materialNumberInput.value = '';
+            quantityInput.value = '';
+        });
+
+        document.getElementById('generate-trolley-file').addEventListener('click', () => {
+            const csvHeader = "Material Description,Material Number,Quantity";
+            const csvRows = allEntries.map(entry => `${entry.description},${entry.number},${entry.quantity}`);
+            const csvContent = `data:text/csv;charset=utf-8,${csvHeader}\n${csvRows.join('\n')}`;
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', `${trolleyNameInput.value}.csv`);
+            document.body.appendChild(link);
+            link.click();
+        });
+    </script>
+</body>
+</html>
